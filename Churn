@@ -1,0 +1,412 @@
+# # Gerekli Kütüphanelerin kurulması ve import edilmesi
+
+
+get_ipython().system('pip install findspark')
+get_ipython().system('pip install pyspark')
+
+
+
+# # Configurasyon ve Spark Bağlantısı 
+
+
+
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.conf import SparkConf
+from pyspark import SparkContext
+
+spark = SparkSession.builder     .master("local")     .appName("churn_modellemesi")     .config("spark.executer.memory", "16gb")     .getOrCreate()
+
+
+
+sc = spark.sparkContext
+sc
+
+
+
+# Spark'ı çalıştırdık ve cache ile Ram'e alıyoruz.
+
+
+
+
+spark_df = spark.read.csv("churn.csv", 
+                          header = True, 
+                          inferSchema = True,
+                          sep = ",")
+spark_df.cache()
+
+
+
+
+
+spark_df.printSchema() # Değişkenleri inceleyelim.
+
+
+spark_df.show(5) # İlk 5 gözleme bakalım.
+
+
+spark_df = spark_df.toDF(*[c.lower() for c in spark_df.columns])  ## Sütunları küçük harfe dönüştürelim sonrasında rahat etmek için.
+
+spark_df.show(5) # Dönüştürdüğümüz halini kontrol edelim
+
+
+
+.
+spark_df = spark_df.withColumnRenamed("_c0", "index") # _c0 'ı index yaparak analiz için uygun hale dönüştürelim.
+
+spark_df.show(2) # Kontrol
+
+
+spark_df.count() # Gözlem sayısına bakalım
+
+
+len(spark_df.columns) # Değişken sayısına bakalım.
+
+
+spark_df.columns
+
+
+spark_df.distinct().count() # Unique gözlem sayısına erişmek için 
+
+
+spark_df.select("names").distinct().count() # Bir de müşteri isimlerine göre unique sayısına bakalım.
+
+# Unique gözlem ve toplam gözlem sayısı farklı.
+
+# 1 tane duplicate ya da aynı isimli 2 kişi var.
+
+
+spark_df.groupby("names").count().sort("count", ascending = False).show(3)
+
+
+
+# Jennifer Wood isminde 2 hesap var. Kontrol edelim.
+
+
+
+spark_df.filter(spark_df.names == "Jennifer Wood").show()
+
+
+
+# Duplicated değiller, aynı isimli farklı kişiler.
+
+spark_df.select("names").dropDuplicates().groupby("names").count().sort("count",ascending = False).show() # Duplicated olanları siler.
+
+spark_df.select("names").dropDuplicates().groupby("names").count().sort("count",ascending = False).show() # Silinmiş halini başka yere kaydetmen gerekir.
+
+
+
+spark_df.where(spark_df.index == 439).select("names").show() # Duplicated olduğunu düşündüğümüze de bu şekilde erişebiliriz.
+
+
+jen = spark_df.where(spark_df.index == 439).collect()[0]["names"] # Spark'tan aldık ve değiştirdik. Başka bir pyhon fonksiyonun girdisi haline getirdik.
+
+
+type(jen) # Kontrol edelim.
+
+
+
+jen.upper() # Büyük harfe çevirelim.
+
+
+
+# ## Keşifçi Veri Analizi
+
+
+
+print(spark_df.describe().show())
+
+
+# bişey anlaşılmıyor. Name değişkenini çıkardım, ihtiyacımız yok zaten.
+
+spark_df.select("age","total_purchase", "account_manager", "years","num_sites","churn").describe().toPandas().transpose() # Pandas'a uygun forma getirdik.
+
+
+
+
+spark_df.filter(spark_df.age > 47).count() # Yaş ortalamasına standart sapmayı ekledik. Üzerinde kaç tane var bir inceleyelim.
+
+
+
+spark_df.groupby("churn").count().show() # Churn eden kaç tane var bakalım.
+# Veri seti biraz dengesiz.
+
+
+
+spark_df.groupby("churn").agg({"total_purchase": "mean"}).show() # # Ortalama harcama ile churn crosstab. Çok yakınlar bir fark yok gibi.
+
+
+
+spark_df.groupby("churn").agg({"years": "mean"}).show() # Uzun süreli müşteri olma ile bir ilişkisi olabilir mi?
+
+# Uzun süreli olanlarda churn yaşanıyor gibi.
+
+
+
+kor_data = spark_df.drop("index","names").toPandas() # İndex ve name değişlenlerini çıkarıp korelasyon incelemek için data oluşturuyoruz.
+
+# # Görselleştirelim.
+
+import seaborn as sns
+sns.pairplot(kor_data,); 
+
+# Göze çarpan bir korelasyon örüntüsü yok bağımsız değişkenler arasında.
+
+
+
+import seaborn as sns
+sns.pairplot(kor_data, hue = "churn");
+
+# Churn ile beraber inceleyelim.
+
+# In[73]:
+
+
+sns.pairplot(kor_data, vars = ["age", "total_purchase","years","num_sites"], 
+             hue = "churn",
+            kind = "reg");
+
+# Yaş-Total purchase kırılımında churn pozitif yönlü ilişkili.
+# İki değişkeni beraber incelediğimizde nasıl bir ilişki var görebiliyoruz.
+
+# ## Veri Ön İşleme
+
+
+spark_df = spark_df.dropna() # # Eksik gözlemlerden kurtulalım.
+
+
+# Yeni bir değişken ekleyelim
+## spark_df = spark_df.withColumn("age_kare", spark_df.age**2)
+
+
+
+# Makine Öğrenmesi modeli için bağımlı ve bağımsız değişkeni belirlememiz lazım.
+# Büyük veri dünyası fonksiyonları çok esnek değil o yüzden dönüşümler yapmamız gerekiyor.
+# Bağımlı değişkenimiz (churn) numerik ama gerçek dünya problemlerinde genelde string oluyorlar.
+# Bu yüzden stringmiş gibi davranacağız.
+
+
+# # Gerekli kütüphaneleri kuralım.
+
+from pyspark.ml.feature import StringIndexer
+
+stringIndexer = StringIndexer(inputCol = "churn", outputCol = "label")
+
+
+# stringIndexer : churn değişkeni girdi, label değişkeni (1 veya 0) çıktı olarak dönüştürür.
+# Bizim bağımlı  değişkenimiz zaten numerik ama diğer tüm problemlerde yukarıdaki dönüşümü uygulaman lazım.
+
+
+
+get_ipython().run_line_magic('pinfo', 'stringIndexer')
+
+
+
+indexed = stringIndexer.fit(spark_df).transform(spark_df) # Dönüştürme işlemin strıngIndexer ile gerçekleştirelim.
+
+
+indexed.dtypes # Değişkenlerin türlerini inceliyoruz.
+
+# Label değişkeni eklendi ama double olarak gözküyor. Integer'e dönüştürmemiz lazım.
+
+
+spark_df = indexed.withColumn("label", indexed["label"].cast("integer")) # label'ı integer'a dönüştürüyoruz.
+
+
+
+spark_df.dtypes # Kontrol edelim.
+
+
+# Bağımlı değişkeni ayarlamış olduk.
+
+
+
+# # Bağımsız değişkenleri ayarlayalım.
+
+
+from pyspark.ml.feature import VectorAssembler
+
+
+spark_df.columns
+
+
+bag = ["age","total_purchase", "account_manager","years","num_sites"] # Bağımsız değişkenleri seçelim.
+
+
+bag
+
+
+vectorAssembler = VectorAssembler(inputCols = bag, outputCol = "features") # Vektörleştirme nesnesinin oluşturulması
+
+# Features dediği seçtiğimiz bağımsız değişkenlerin vektörleştirilmiş son hali oluyor dataya uygulandığında.
+
+
+va_df = vectorAssembler.transform(spark_df) # Spark_df'e nesneyi uyarlayıp dönüştürüyoruz. Önceden label'ı oluşturmuştuk spark_df'in içinde zaten.
+
+
+final_df = va_df.select(["features","label"])
+
+
+final_df.show()
+
+
+# ## Test-train
+
+
+
+splits = final_df.randomSplit([0.7,0.3]) # yüzde 70 ve 30 olarak train-test olarak ayırdık
+train_df = splits[0] # Train'i seçer.
+test_df = splits[1] # Test'i seçer.
+
+
+
+train_df
+
+
+test_df
+
+
+# # GBM ile Müşteri Terk Modellemesi
+
+
+# Gerekli kütüphaneyi çalıştıralım.
+
+from pyspark.ml.classification import GBTClassifier
+
+
+gbm = GBTClassifier(maxIter = 10, featuresCol = "features", labelCol = "label") # Model nesnesini oluşturuyoruz.
+
+gbm_model = gbm.fit(train_df) 
+
+
+y_pred = gbm_model.transform(test_df)
+
+y_pred
+
+
+
+ac = y_pred.select("label","prediction") # İlkel test hatası, label: asıl değerler, prediction : tahminler
+
+ac.filter(ac.label == ac.prediction).count() / ac.count() # İlkel test hatası, valide edilmesi gerekiyor sonrasında.
+
+
+# Modelin tune edilmesi ve parametreleri
+
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
+
+evaluator = BinaryClassificationEvaluator()
+
+paramGrid = (ParamGridBuilder()
+             .addGrid(gbm.maxDepth, [2, 4, 6])
+             .addGrid(gbm.maxBins, [20, 30])
+             .addGrid(gbm.maxIter, [10, 20])
+             .build())
+
+cv = CrossValidator(estimator= gbm, estimatorParamMaps = paramGrid, evaluator=evaluator, numFolds= 10)
+
+
+
+
+cv_model = cv.fit(train_df) # Model nesnemiz
+
+y_pred = cv_model.transform(test_df)
+ac = y_pred.select("label","prediction")
+
+
+
+ac.filter(ac.label == ac.prediction).count() / ac.count() # Tahmin oranı
+
+
+
+
+# AUC DEĞERİ
+evaluator.evaluate(y_pred)
+
+
+# ## Bu müşteriler bizi terk eder mi?
+
+
+# Kendimiz yeni müşteriler oluşturduk
+
+import pandas as pd
+names = pd.Series(["Ahmet Gündüz", "Müslüm Gürses", "Ayşe Harika","Alexander Humbold", "Hay bin Kunduz"])
+age = pd.Series([38, 43, 34, 50, 40])
+total_purchase = pd.Series([30000, 10000, 6000, 30000, 100000])
+account_manager = pd.Series([1,0,0,1,1])
+years = pd.Series([20, 10, 3, 8, 30])
+num_sites = pd.Series([30,8,8,6,50])
+
+
+yeni_musteriler = pd.DataFrame({
+    'names':names,
+    'age': age,
+    'total_purchase': total_purchase,
+    'account_manager': account_manager ,
+    'years': years,
+    'num_sites': num_sites})
+
+
+yeni_musteriler.columns
+
+
+yeni_musteriler
+
+
+
+yeni_sdf = spark.createDataFrame(yeni_musteriler) # Oluşturduğumuz veriyi spark dataframe'e çevirelim.
+
+
+
+type(yeni_sdf)
+
+
+
+
+yeni_sdf.show()
+
+
+yeni_musteriler = vectorAssembler.transform(yeni_sdf) # Yeni müşterileri vektör haline getirelim spark formundaki halinden.
+
+
+
+sonuclar = cv_model.transform(yeni_musteriler) # Train ve Cross valide edilmiş modeli spark formunda vektörize edilmiş veriye uygulayalım.
+
+
+
+
+sonuclar.select("names","prediction").show() # Tahminleri listeleyelim. (Hangi müşteri churn edecek)
+
+
+# ## Diğer Bazı Modeller
+
+
+# LogisticRegression
+
+from pyspark.ml.classification import LogisticRegression
+loj = LogisticRegression(featuresCol = "features", labelCol = 'label', maxIter=10)
+loj_model = loj.fit(train_df)
+y_pred = loj_model.transform(test_df)
+ac = y_pred.select("label", "prediction")
+ac.filter(ac.label == ac.prediction).count() / ac.count()
+
+
+
+# DecisionTreeClassifier
+
+from pyspark.ml.classification import DecisionTreeClassifier
+dt = DecisionTreeClassifier(featuresCol = 'features', labelCol = 'label', maxDepth = 3)
+dt_model = dt.fit(train_df)
+y_pred = dt_model.transform(test_df)
+ac = y_pred.select("label", "prediction")
+ac.filter(ac.label == ac.prediction).count() / ac.count()
+
+
+# Random Forest Classifier
+
+from pyspark.ml.classification import RandomForestClassifier
+rf = RandomForestClassifier(featuresCol = 'features', labelCol = 'label')
+rf_model = rf.fit(train_df)
+y_pred = rf_model.transform(test_df)
+ac = y_pred.select("label", "prediction")
+ac.filter(ac.label == ac.prediction).count() / ac.count()
