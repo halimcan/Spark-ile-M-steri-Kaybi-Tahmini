@@ -1,4 +1,4 @@
-# Spark-ile-M-steri-Kaybi-Tahmini
+# Spark-ile-Musteri-Kaybi-Tahmini
 
 #Müşteri kaybı tahminine yönelik Spark üzerinde model geliştirilmesi
 
