@@ -1,14 +1,10 @@
-# # Gerekli Kütüphanelerin kurulması ve import edilmesi
-
+##### Gerekli Kütüphanelerin kurulması ve import edilmesi
 
 get_ipython().system('pip install findspark')
 get_ipython().system('pip install pyspark')
 
 
-
 # # Configurasyon ve Spark Bağlantısı 
-
-
 
 import pyspark
 from pyspark.sql import SparkSession
@@ -17,17 +13,10 @@ from pyspark import SparkContext
 
 spark = SparkSession.builder     .master("local")     .appName("churn_modellemesi")     .config("spark.executer.memory", "16gb")     .getOrCreate()
 
-
-
 sc = spark.sparkContext
 sc
 
-
-
-
-
-
-# Verisetini yükleyelim.
+##### Verisetini yükleyelim.
 
 spark_df = spark.read.csv("churn.csv", 
                           header = True, 
@@ -38,38 +27,28 @@ spark_df.cache()
 
 # cache ile Ram'e aldık.
 
-
 spark_df.printSchema() # Değişkenleri inceleyelim.
 
-
 spark_df.show(5) # İlk 5 gözleme bakalım.
-
 
 spark_df = spark_df.toDF(*[c.lower() for c in spark_df.columns])  ## Sütunları küçük harfe dönüştürelim sonrasında rahat etmek için.
 
 spark_df.show(5) # Dönüştürdüğümüz halini kontrol edelim
 
-
-
-.
 spark_df = spark_df.withColumnRenamed("_c0", "index") # _c0 'ı index yaparak analiz için uygun hale dönüştürelim.
 
 spark_df.show(2) # Kontrol
 
-
 spark_df.count() # Gözlem sayısına bakalım
-
 
 len(spark_df.columns) # Değişken sayısına bakalım.
 
-
 spark_df.columns
-
 
 spark_df.distinct().count() # Unique gözlem sayısına erişmek için 
 
-
 spark_df.select("names").distinct().count() # Bir de müşteri isimlerine göre unique sayısına bakalım.
+
 
 # Unique gözlem ve toplam gözlem sayısı farklı.
 
@@ -78,29 +57,23 @@ spark_df.select("names").distinct().count() # Bir de müşteri isimlerine göre 
 
 spark_df.groupby("names").count().sort("count", ascending = False).show(3)
 
-
-
 # Jennifer Wood isminde 2 hesap var. Kontrol edelim.
-
-
 
 spark_df.filter(spark_df.names == "Jennifer Wood").show()
 
 
-
 # Duplicated değiller, aynı isimli farklı kişiler.
+
 
 spark_df.select("names").dropDuplicates().groupby("names").count().sort("count",ascending = False).show() # Duplicated olanları siler.
 
-spark_df.select("names").dropDuplicates().groupby("names").count().sort("count",ascending = False).show() # Silinmiş halini başka yere kaydetmen gerekir.
-
-
+spark_df.select("names").dropDuplicates().groupby("names").count().sort("count",ascending = False).show() # Silinmiş halini başka yere kaydetmek gerekir.
 
 spark_df.where(spark_df.index == 439).select("names").show() # Duplicated olduğunu düşündüğümüze de bu şekilde erişebiliriz.
 
 
-jen = spark_df.where(spark_df.index == 439).collect()[0]["names"] # Spark'tan aldık ve değiştirdik. Başka bir pyhon fonksiyonun girdisi haline getirdik.
 
+jen = spark_df.where(spark_df.index == 439).collect()[0]["names"] # Spark'tan aldık ve değiştirdik. Başka bir pyhon fonksiyonun girdisi haline getirdik.
 
 type(jen) # Kontrol edelim.
 
@@ -110,7 +83,7 @@ jen.upper() # Büyük harfe çevirelim.
 
 
 
-# ## Keşifçi Veri Analizi
+####### Keşifçi Veri Analizi
 
 
 
@@ -145,7 +118,7 @@ spark_df.groupby("churn").agg({"years": "mean"}).show() # Uzun süreli müşteri
 
 kor_data = spark_df.drop("index","names").toPandas() # İndex ve name değişlenlerini çıkarıp korelasyon incelemek için data oluşturuyoruz.
 
-# # Görselleştirelim.
+##### Görselleştirelim.
 
 import seaborn as sns
 sns.pairplot(kor_data,); 
@@ -159,8 +132,6 @@ sns.pairplot(kor_data, hue = "churn");
 
 # Churn ile beraber inceleyelim.
 
-# In[73]:
-
 
 sns.pairplot(kor_data, vars = ["age", "total_purchase","years","num_sites"], 
              hue = "churn",
@@ -169,13 +140,13 @@ sns.pairplot(kor_data, vars = ["age", "total_purchase","years","num_sites"],
 # Yaş-Total purchase kırılımında churn pozitif yönlü ilişkili.
 # İki değişkeni beraber incelediğimizde nasıl bir ilişki var görebiliyoruz.
 
-# ## Veri Ön İşleme
+##### Veri Ön İşleme
 
 
 spark_df = spark_df.dropna() # # Eksik gözlemlerden kurtulalım.
 
 
-# Yeni bir değişken ekleyelim
+# Yeni bir değişken eklemek istersen mesela.
 ## spark_df = spark_df.withColumn("age_kare", spark_df.age**2)
 
 
@@ -186,7 +157,7 @@ spark_df = spark_df.dropna() # # Eksik gözlemlerden kurtulalım.
 # Bu yüzden stringmiş gibi davranacağız.
 
 
-# # Gerekli kütüphaneleri kuralım.
+##### Gerekli kütüphaneleri kuralım.
 
 from pyspark.ml.feature import StringIndexer
 
@@ -266,7 +237,7 @@ train_df
 test_df
 
 
-# # GBM ile Müşteri Terk Modellemesi
+##### GBM ile Müşteri Terk Modellemesi
 
 
 # Gerekli kütüphaneyi çalıştıralım.
@@ -320,7 +291,7 @@ ac.filter(ac.label == ac.prediction).count() / ac.count() # Tahmin oranı
 
 
 
-# AUC DEĞERİ
+##### AUC DEĞERİ
 evaluator.evaluate(y_pred)
 
 
@@ -378,7 +349,7 @@ sonuclar = cv_model.transform(yeni_musteriler) # Train ve Cross valide edilmiş 
 sonuclar.select("names","prediction").show() # Tahminleri listeleyelim. (Hangi müşteri churn edecek)
 
 
-# ## Diğer Bazı Modeller
+##### Diğer Bazı Modeller
 
 
 # LogisticRegression
