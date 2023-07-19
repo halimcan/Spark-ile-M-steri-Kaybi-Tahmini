@@ -1,10 +1,10 @@
-##### Gerekli Kütüphanelerin kurulması ve import edilmesi
+##### Importing required libraries
 
 get_ipython().system('pip install findspark')
 get_ipython().system('pip install pyspark')
 
 
-# # Configurasyon ve Spark Bağlantısı 
+# # Configuration and Spark Connection
 
 import pyspark
 from pyspark.sql import SparkSession
@@ -16,7 +16,7 @@ spark = SparkSession.builder     .master("local")     .appName("churn_modellemes
 sc = spark.sparkContext
 sc
 
-##### Verisetini yükleyelim.
+##### Loading dataset.
 
 spark_df = spark.read.csv("churn.csv", 
                           header = True, 
@@ -25,39 +25,38 @@ spark_df = spark.read.csv("churn.csv",
 spark_df.cache()
 
 
-# cache ile Ram'e aldık.
+# cache
 
-spark_df.printSchema() # Değişkenleri inceleyelim.
+spark_df.printSchema() # Check variables.
 
-spark_df.show(5) # İlk 5 gözleme bakalım.
+spark_df.show(5)
 
-spark_df = spark_df.toDF(*[c.lower() for c in spark_df.columns])  ## Sütunları küçük harfe dönüştürelim sonrasında rahat etmek için.
+spark_df = spark_df.toDF(*[c.lower() for c in spark_df.columns])  ## Let's convert the columns to lower case.
 
-spark_df.show(5) # Dönüştürdüğümüz halini kontrol edelim
+spark_df.show(5)
 
-spark_df = spark_df.withColumnRenamed("_c0", "index") # _c0 'ı index yaparak analiz için uygun hale dönüştürelim.
+spark_df = spark_df.withColumnRenamed("_c0", "index") #  make it suitable for analysis.
 
-spark_df.show(2) # Kontrol
+spark_df.show(2) # Control
 
-spark_df.count() # Gözlem sayısına bakalım
+spark_df.count() # Let's look at the number of observations
 
-len(spark_df.columns) # Değişken sayısına bakalım.
+len(spark_df.columns) # Let's look at the number of variables
 
 spark_df.columns
 
-spark_df.distinct().count() # Unique gözlem sayısına erişmek için 
+spark_df.distinct().count() # Number of Unique observations  
 
-spark_df.select("names").distinct().count() # Bir de müşteri isimlerine göre unique sayısına bakalım.
+spark_df.select("names").distinct().count() # Let's look at the number of uniques by customer name.
 
+# Unique observation and total number of observations are different.
 
-# Unique gözlem ve toplam gözlem sayısı farklı.
-
-# 1 tane duplicate ya da aynı isimli 2 kişi var.
+# There is 1 duplicate or 2 people with the same name.
 
 
 spark_df.groupby("names").count().sort("count", ascending = False).show(3)
 
-# Jennifer Wood isminde 2 hesap var. Kontrol edelim.
+# There are two accounts in the name of Jennifer Wood. Let's check.
 
 spark_df.filter(spark_df.names == "Jennifer Wood").show()
 
