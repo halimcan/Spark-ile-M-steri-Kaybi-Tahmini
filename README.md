@@ -1,6 +1,6 @@
-# Spark-ile-Musteri-Kaybi-Tahmini
+# Spark-ile-Customer-Churn-Forecasting
 
-#Müşteri kaybı tahminine yönelik Spark üzerinde model geliştirilmesi
+#Developing a model for customer churn prediction on Spark
 
-#RandomForest, Logistic Regression ve DecisionTrees algoritmaları kullanılmıştır.
+#RandomForest, Logistic Regression and DecisionTrees algorithms were used.
 
